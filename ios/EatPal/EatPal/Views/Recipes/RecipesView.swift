@@ -19,6 +19,8 @@ struct RecipesView: View {
     @State private var isSelecting = false
     @State private var selectedIds: Set<String> = []
     @State private var showingBulkDeleteConfirm = false
+    // M3: a single swipe used to delete a recipe with no way back.
+    @State private var recipePendingDeletion: Recipe?
 
     // US-270: cookable-recipes sheet entry.
     @State private var showingCookable = false
@@ -245,11 +247,10 @@ struct RecipesView: View {
                                     : "Add \(recipe.name) to favorites")
                             }
                         }
-                        .swipeActions(edge: .trailing, allowsFullSwipe: !isSelecting) {
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                             if !isSelecting {
                                 Button(role: .destructive) {
-                                    HapticManager.error()
-                                    Task { try? await appState.deleteRecipe(recipe.id) }
+                                    recipePendingDeletion = recipe
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
@@ -283,8 +284,7 @@ struct RecipesView: View {
                             Divider()
 
                             Button(role: .destructive) {
-                                HapticManager.error()
-                                Task { try? await appState.deleteRecipe(recipe.id) }
+                                recipePendingDeletion = recipe
                             } label: {
                                 Label("Delete", systemImage: "trash")
                             }
@@ -426,6 +426,22 @@ struct RecipesView: View {
         } message: {
             Text("This can't be undone.")
         }
+        .confirmationDialog(
+            "Delete \(recipePendingDeletion?.name ?? "this recipe")?",
+            isPresented: Binding(
+                get: { recipePendingDeletion != nil },
+                set: { if !$0 { recipePendingDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: recipePendingDeletion
+        ) { recipe in
+            Button("Delete", role: .destructive) {
+                Task { await deleteRecipe(recipe) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("This can't be undone.")
+        }
         .refreshable {
             await appState.loadAllData()
         }
@@ -458,6 +474,15 @@ struct RecipesView: View {
             try await appState.bulkAddRecipesToGrocery(ids)
             exitSelectMode()
         } catch { }
+    }
+
+    private func deleteRecipe(_ recipe: Recipe) async {
+        do {
+            try await appState.deleteRecipe(recipe.id)
+        } catch {
+            // AppState.deleteRecipe restores the row and already shows the
+            // error toast; a second one here would just queue behind it.
+        }
     }
 
     private func bulkDelete() async {
@@ -659,6 +684,105 @@ struct RecipeRowView: View {
     }
 }
 
+// MARK: - Recipe allergens vs children (M21/M10)
+
+/// Which children a recipe is unsafe for. Checks linked pantry foods through
+/// AllergenMatcher.hit (tags plus name), and unlinked ingredient names and
+/// the legacy free-text ingredient line by name, so an imported recipe whose
+/// "peanut butter" never linked to a pantry item is still caught.
+enum RecipeAllergenCheck {
+    struct KidHit: Identifiable, Equatable {
+        let kid: Kid
+        /// Kid-side canonical allergen keys, in the order first found.
+        let allergens: [String]
+        var id: String { kid.id }
+
+        /// "Sam: peanut (severe), milk", for banners and confirmations.
+        var summary: String {
+            let parts: [String] = allergens.map { (key: String) -> String in
+                if let level = AllergenMatcher.recordedSeverity(for: kid, key: key) {
+                    return "\(key) (\(level))"
+                }
+                return key
+            }
+            let list = parts.joined(separator: ", ")
+            return "\(kid.name): \(list)"
+        }
+    }
+
+    static func hits(recipe: Recipe, kids: [Kid], foods: [Food]) -> [KidHit] {
+        var out: [KidHit] = []
+        for kid in kids {
+            let keys = allergens(in: recipe, for: kid, foods: foods)
+            if !keys.isEmpty { out.append(KidHit(kid: kid, allergens: keys)) }
+        }
+        return out
+    }
+
+    static func allergens(in recipe: Recipe, for kid: Kid, foods: [Food]) -> [String] {
+        guard let kidAllergens = kid.allergens, !kidAllergens.isEmpty else { return [] }
+        var found: [String] = []
+        func note(_ key: String?) {
+            guard let key, !found.contains(key) else { return }
+            found.append(key)
+        }
+        let foodsById = Dictionary(foods.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        for foodId in recipe.foodIds {
+            if let food = foodsById[foodId] { note(AllergenMatcher.hit(for: kid, food: food)) }
+        }
+        for ingredient in recipe.ingredients {
+            if let foodId = ingredient.foodId, let food = foodsById[foodId] {
+                note(AllergenMatcher.hit(for: kid, food: food))
+            }
+            // The name is checked even when linked: "almond milk" linked to a
+            // pantry "Milk" row carries a tree nut the row does not.
+            note(AllergenMatcher.matching(kidAllergens: kidAllergens, foodName: ingredient.name, foodAllergens: nil))
+        }
+        if let extra = recipe.additionalIngredients, !extra.isEmpty {
+            let pieces = extra.split(whereSeparator: { $0 == "," || $0 == "\n" })
+            for piece in pieces {
+                note(AllergenMatcher.matching(kidAllergens: kidAllergens, foodName: String(piece), foodAllergens: nil))
+            }
+        }
+        return found
+    }
+}
+
+/// Red banner naming each child a recipe is unsafe for.
+struct RecipeAllergenBanner: View {
+    let hits: [RecipeAllergenCheck.KidHit]
+
+    var body: some View {
+        if !hits.isEmpty {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.red)
+                    .font(.title3)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Contains allergens")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.red)
+                    ForEach(hits) { hit in
+                        Text(hit.summary)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text("Based on ingredient names and pantry tags. Always check the labels.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
+
 // MARK: - Recipe Detail View
 
 struct RecipeDetailView: View {
@@ -689,6 +813,10 @@ struct RecipeDetailView: View {
 
     private var currentRecipe: Recipe {
         appState.recipes.first { $0.id == recipe.id } ?? recipe
+    }
+
+    private var allergenHits: [RecipeAllergenCheck.KidHit] {
+        RecipeAllergenCheck.hits(recipe: currentRecipe, kids: appState.kids, foods: appState.foods)
     }
 
     private var originalServings: Int {
@@ -766,6 +894,11 @@ struct RecipeDetailView: View {
                                 .font(.body)
                                 .foregroundStyle(.secondary)
                         }
+                    }
+
+                    let hits = allergenHits
+                    if !hits.isEmpty {
+                        RecipeAllergenBanner(hits: hits)
                     }
 
                     // Meta Info
@@ -1016,7 +1149,9 @@ struct RecipeDetailView: View {
             .fullScreenCover(isPresented: $showingCookMode) {
                 CookModeView(
                     recipeName: currentRecipe.name,
-                    instructions: currentRecipe.instructions
+                    instructions: currentRecipe.instructions,
+                    ingredientLines: cookModeIngredientLines,
+                    allergenHits: allergenHits
                 )
             }
             // US-357: add-to-plan picker; on dismiss compute the shortfall.
@@ -1044,6 +1179,29 @@ struct RecipeDetailView: View {
                 }
             }
         }
+    }
+
+    /// Ingredient lines for cook mode, scaled like the detail view shows them.
+    private var cookModeIngredientLines: [String] {
+        if !currentRecipe.ingredients.isEmpty {
+            let sorted = currentRecipe.ingredients.sorted { $0.sortOrder < $1.sortOrder }
+            let scale = servingScale
+            return sorted.map { (ingredient: RecipeIngredient) -> String in
+                guard let qty = ingredient.quantity, qty > 0 else { return ingredient.name }
+                let amount: String = RecipeScaling.formatQuantity(qty * scale)
+                if let unit = ingredient.unit, !unit.isEmpty {
+                    return "\(amount) \(unit) \(ingredient.name)"
+                }
+                return "\(amount) \(ingredient.name)"
+            }
+        }
+        var lines: [String] = currentRecipe.foodIds.compactMap { id in
+            appState.foods.first { $0.id == id }?.name
+        }
+        if let extra = currentRecipe.additionalIngredients, !extra.isEmpty {
+            lines.append(extra)
+        }
+        return lines
     }
 
     /// US-357/US-353: after the add-to-plan picker closes, compute the pantry
@@ -1111,10 +1269,27 @@ struct AddRecipeToPlanSheet: View {
     @State private var mealSlot: MealSlot = .dinner
     @State private var kidId: String = ""
     @State private var isSubmitting = false
+    @State private var showingAllergenConfirm = false
+
+    /// M21: the allergens this recipe carries for the child being planned.
+    private var selectedKidHit: RecipeAllergenCheck.KidHit? {
+        guard let kid = appState.kids.first(where: { $0.id == kidId }) else { return nil }
+        let keys = RecipeAllergenCheck.allergens(in: recipe, for: kid, foods: appState.foods)
+        return keys.isEmpty ? nil : RecipeAllergenCheck.KidHit(kid: kid, allergens: keys)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                if let hit = selectedKidHit {
+                    Section {
+                        Label(hit.summary, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    } header: {
+                        Text("Contains allergens")
+                    }
+                }
+
                 DatePicker("Date", selection: $date, displayedComponents: .date)
 
                 Picker("Meal", selection: $mealSlot) {
@@ -1139,9 +1314,21 @@ struct AddRecipeToPlanSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Add") { Task { await add() } }
-                        .disabled(isSubmitting || kidId.isEmpty)
+                    Button("Add") {
+                        if selectedKidHit != nil {
+                            showingAllergenConfirm = true
+                        } else {
+                            Task { await add() }
+                        }
+                    }
+                    .disabled(isSubmitting || kidId.isEmpty)
                 }
+            }
+            .alert(allergenConfirmTitle, isPresented: $showingAllergenConfirm) {
+                Button("Add anyway", role: .destructive) { Task { await add() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(allergenConfirmMessage)
             }
             .onAppear {
                 if kidId.isEmpty {
@@ -1149,6 +1336,17 @@ struct AddRecipeToPlanSheet: View {
                 }
             }
         }
+    }
+
+    private var allergenConfirmTitle: String {
+        guard let hit = selectedKidHit else { return "Add to plan?" }
+        return "Plan this for \(hit.kid.name)?"
+    }
+
+    private var allergenConfirmMessage: String {
+        guard let hit = selectedKidHit else { return "" }
+        let list = hit.allergens.joined(separator: ", ")
+        return "This recipe looks like it contains \(list), which \(hit.kid.name) is allergic to."
     }
 
     /// `plan_entries.food_id` is NOT NULL, so resolve a concrete food UUID.
@@ -1224,7 +1422,10 @@ struct RecipeNutritionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Nutrition")
+            // M23: the values are one serving (HealthKit logs them per meal
+            // as-is); unlabeled, they read as the whole dish and don't move
+            // with the servings stepper.
+            Text("Nutrition per serving")
                 .font(.headline)
 
             LazyVGrid(columns: [
@@ -1246,6 +1447,14 @@ struct RecipeNutritionCard: View {
                 }
                 if let fiber = nutrition.fiberG {
                     NutritionItem(label: "Fiber", value: String(format: "%.1f", fiber), unit: "g")
+                }
+                // Iron and calcium are the two a pediatrician asks about for
+                // a limited diet.
+                if let iron = nutrition.ironMg {
+                    NutritionItem(label: "Iron", value: String(format: "%.1f", iron), unit: "mg")
+                }
+                if let calcium = nutrition.calciumMg {
+                    NutritionItem(label: "Calcium", value: "\(Int(calcium))", unit: "mg")
                 }
             }
         }

@@ -35,6 +35,21 @@ export interface FoodRow {
   id: string;
   name: string;
   allergens: string[] | null;
+  quantity?: number | null;
+  expiry_date?: string | null;
+}
+
+/**
+ * Whether a pantry row counts as on hand for "cook with what you have". An
+ * expired food or one with a quantity of zero stays known (its name and
+ * allergens still matter) but is treated as missing, so an expired ingredient
+ * is never presented as available for a child's dinner. `today` is an ISO
+ * date (YYYY-MM-DD); expiry_date is compared as a civil date string.
+ */
+export function isOnHand(food: FoodRow, today: string): boolean {
+  if (food.quantity != null && food.quantity <= 0) return false;
+  if (food.expiry_date && food.expiry_date.slice(0, 10) < today) return false;
+  return true;
 }
 
 export interface KidRow {

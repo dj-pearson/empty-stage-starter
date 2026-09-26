@@ -2,6 +2,7 @@
 // Run with: deno test supabase/functions/_shared/tonight-mode.test.ts
 import { assertEquals } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
+  isOnHand,
   kidFitFor,
   tonightScope,
   tonightScopeFilter,
@@ -111,4 +112,22 @@ Deno.test('varietyScore weights recent plans and ignores other recipes', () => {
     now,
   );
   assertEquals(score, (3 / 21) * 3);
+});
+
+// --- on hand ----------------------------------------------------------------
+
+Deno.test('isOnHand treats expired and used-up food as missing', () => {
+  const food = (quantity: number | null, expiry_date: string | null): FoodRow => ({
+    id: 'f',
+    name: 'Chicken',
+    allergens: null,
+    quantity,
+    expiry_date,
+  });
+  const today = '2026-09-26';
+  assertEquals(isOnHand(food(2, null), today), true);
+  assertEquals(isOnHand(food(null, null), today), true);
+  assertEquals(isOnHand(food(2, '2026-09-26'), today), true); // expires today: still usable
+  assertEquals(isOnHand(food(2, '2026-09-25'), today), false);
+  assertEquals(isOnHand(food(0, null), today), false);
 });

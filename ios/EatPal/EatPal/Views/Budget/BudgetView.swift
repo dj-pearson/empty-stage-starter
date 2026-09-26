@@ -216,7 +216,7 @@ struct BudgetView: View {
         } header: {
             Text("Set a weekly target")
         } footer: {
-            Text("AIMealService will gently prefer cheaper meals when a target is set.")
+            Text("With a target set, AI meal suggestions lean toward cheaper meals.")
                 .font(.caption2)
         }
     }

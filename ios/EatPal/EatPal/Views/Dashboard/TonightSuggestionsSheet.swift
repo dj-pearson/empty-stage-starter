@@ -8,6 +8,13 @@ struct TonightSuggestionsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage("tonightMode.selectedKidIds") private var storedKidIdsRaw: String = ""
+    /// The day the selection above was saved. A kid unticked yesterday would
+    /// otherwise stay out of tonight's allergen check with nothing on screen
+    /// saying so; the narrowed selection now lasts for the evening only.
+    @AppStorage("tonightMode.selectedKidIdsDate") private var storedKidIdsDate: String = ""
+    /// Suggestions whose missing items were already added this session, so a
+    /// second tap can't put the same ingredients on the list twice.
+    @State private var addedMissingFor: Set<String> = []
     @State private var selectedKidIds: Set<String> = []
     @State private var suggestions: [TonightModeService.Suggestion] = []
     @State private var loading = false
@@ -78,6 +85,7 @@ struct TonightSuggestionsSheet: View {
                                 suggestion: s,
                                 rank: index,
                                 kids: appState.kids,
+                                missingAdded: addedMissingFor.contains(s.id),
                                 onCook: { onCook(s, rank: index) },
                                 onAddMissing: { onAddMissing(s) },
                                 onAddToPlan: { onAddToPlan(s) }
@@ -96,7 +104,9 @@ struct TonightSuggestionsSheet: View {
 
     private var kidPicker: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Cooking for")
+            Text(excludedKidNames.isEmpty
+                 ? "Cooking for"
+                 : "Cooking for (not checking allergies for \(excludedKidNames))")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             ScrollView(.horizontal, showsIndicators: false) {
@@ -155,15 +165,20 @@ struct TonightSuggestionsSheet: View {
             Spacer()
             Button {
                 AnalyticsService.track(.tonightDeliveryFallbackChosen)
+                guard !addedMissingFor.contains(top.id) else { return }
                 // US-473: don't force-close the sheet — add the shortfall to
                 // the grocery list and keep suggestions on screen so the user
                 // can still cook / plan / refresh.
                 onAddMissing(top)
             } label: {
-                Label("Add missing", systemImage: "cart")
+                Label(
+                    addedMissingFor.contains(top.id) ? "Added" : "Add missing",
+                    systemImage: addedMissingFor.contains(top.id) ? "checkmark" : "cart"
+                )
                     .font(.subheadline)
             }
             .buttonStyle(.bordered)
+            .disabled(addedMissingFor.contains(top.id))
         }
         .padding(12)
         .background(Color.yellow.opacity(0.10), in: RoundedRectangle(cornerRadius: 12))
@@ -187,13 +202,45 @@ struct TonightSuggestionsSheet: View {
         planningRecipe = recipe
     }
 
+    /// Adds the suggestion's missing ingredients once: names already on the
+    /// unchecked list are skipped, each add is silent, and one toast says what
+    /// happened. The button then reads "Added" for this suggestion.
     private func onAddMissing(_ s: TonightModeService.Suggestion) {
+        guard !addedMissingFor.contains(s.id) else { return }
+        addedMissingFor.insert(s.id)
         Task {
+            var onList = Set(
+                appState.groceryItems
+                    .filter { !$0.checked }
+                    .map { $0.name.trimmingCharacters(in: .whitespaces).lowercased() }
+            )
+            var added = 0
+            var failed = 0
             for missing in s.missingIngredients {
+                let key = missing.name.trimmingCharacters(in: .whitespaces).lowercased()
+                guard !key.isEmpty, !onList.contains(key) else { continue }
                 let item = GroceryItem.makeFromMissingIngredient(name: missing.name, sourceRecipeId: s.recipeId)
-                try? await appState.addGroceryItem(item)
+                do {
+                    try await appState.addGroceryItem(item, silent: true)
+                    onList.insert(key)
+                    added += 1
+                } catch {
+                    // addGroceryItem already toasted the failure.
+                    failed += 1
+                }
             }
-            AnalyticsService.track(.tonightMissingAddedToGrocery(count: s.missingIngredients.count))
+            if added == 0 && failed > 0 {
+                // Nothing landed: let them try again.
+                addedMissingFor.remove(s.id)
+                return
+            }
+            if added > 0 {
+                ToastManager.shared.success("Added \(added) to grocery list")
+                HapticManager.success()
+            } else {
+                ToastManager.shared.info("Already on your grocery list")
+            }
+            AnalyticsService.track(.tonightMissingAddedToGrocery(count: added))
         }
     }
 
@@ -218,6 +265,10 @@ struct TonightSuggestionsSheet: View {
 
     private func initSelection() {
         let knownIds = Set(appState.kids.map(\.id))
+        guard storedKidIdsDate == TonightModeService.todayIso() else {
+            selectedKidIds = knownIds
+            return
+        }
         let stored = storedKidIdsRaw.split(separator: ",").map { String($0) }
         let restored = Set(stored).intersection(knownIds)
         selectedKidIds = restored.isEmpty ? knownIds : restored
@@ -225,6 +276,16 @@ struct TonightSuggestionsSheet: View {
 
     private func persistSelection() {
         storedKidIdsRaw = selectedKidIds.sorted().joined(separator: ",")
+        storedKidIdsDate = TonightModeService.todayIso()
+    }
+
+    /// Names of kids left out of the check, for the picker caption.
+    private var excludedKidNames: String {
+        guard !selectedKidIds.isEmpty else { return "" }
+        return appState.kids
+            .filter { !selectedKidIds.contains($0.id) }
+            .map(\.name)
+            .joined(separator: ", ")
     }
 
     private func kidBinding(for id: String) -> Binding<Bool> {
@@ -260,6 +321,7 @@ private struct TonightSuggestionCard: View {
     let suggestion: TonightModeService.Suggestion
     let rank: Int
     let kids: [Kid]
+    var missingAdded: Bool = false
     let onCook: () -> Void
     let onAddMissing: () -> Void
     // US-473: schedule this suggestion into the planner (pick slot/day/kid).
@@ -271,7 +333,8 @@ private struct TonightSuggestionCard: View {
                 hero
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        if rank == 0 {
+                        // Never crown a meal that hits a selected kid's allergen.
+                        if rank == 0 && !suggestion.kidFit.contains(where: { $0.status == .allergen }) {
                             Text("Top pick")
                                 .font(.caption2.bold())
                                 .padding(.horizontal, 6)
@@ -344,16 +407,19 @@ private struct TonightSuggestionCard: View {
         let color: Color
         let reason: String
         switch fit.status {
+        // "Safe" was a medical claim the data can't back: the check only
+        // knows recorded allergens and dislikes. A dislike is information, not
+        // a reason to skip the meal -- serve a safe food alongside it.
         case .ok:
             icon = "checkmark.circle.fill"
             color = .green
-            reason = "Safe"
+            reason = "No listed allergens or dislikes"
         case .warn:
-            icon = "exclamationmark.triangle.fill"
-            color = .orange
+            icon = "info.circle.fill"
+            color = .secondary
             reason = fit.blockingAversions.isEmpty
-                ? "Has soft-blocked food"
-                : "Has \(fit.blockingAversions.joined(separator: ", "))"
+                ? "Includes a food they usually skip. Serve a safe food alongside"
+                : "Includes \(fit.blockingAversions.joined(separator: ", ")). Serve a safe food alongside"
         case .allergen:
             icon = "xmark.octagon.fill"
             color = .red
@@ -382,15 +448,22 @@ private struct TonightSuggestionCard: View {
 
             if suggestion.missingIngredients.count > 0 {
                 Button(action: onAddMissing) {
-                    Label("Add \(suggestion.missingIngredients.count)", systemImage: "cart.badge.plus")
+                    Label(
+                        missingAdded ? "Added" : "Add \(suggestion.missingIngredients.count)",
+                        systemImage: missingAdded ? "checkmark" : "cart.badge.plus"
+                    )
                         .font(.subheadline)
                 }
                 .buttonStyle(.bordered)
+                .disabled(missingAdded)
+                .accessibilityLabel(missingAdded
+                    ? "Missing items added to grocery list"
+                    : "Add \(suggestion.missingIngredients.count) missing items to grocery list")
             }
 
             // US-473: schedule into the planner for any meal slot.
             Button(action: onAddToPlan) {
-                Label("Plan", systemImage: "calendar.badge.plus")
+                Label("Add to plan", systemImage: "calendar.badge.plus")
                     .font(.subheadline)
             }
             .buttonStyle(.bordered)
@@ -418,6 +491,9 @@ private struct KidChipToggleStyle: ToggleStyle {
                 .foregroundStyle(configuration.isOn ? Color.white : Color.primary)
         }
         .buttonStyle(.plain)
+        // A plain Button drops the Toggle's state for VoiceOver.
+        .accessibilityAddTraits(configuration.isOn ? [.isSelected] : [])
+        .accessibilityValue(configuration.isOn ? "Included" : "Not included")
     }
 }
 
@@ -454,10 +530,9 @@ private extension View {
 
 private extension GroceryItem {
     static func makeFromMissingIngredient(name: String, sourceRecipeId: String) -> GroceryItem {
-        // The iOS GroceryItem model doesn't carry source_recipe_id today;
-        // we encode the link in addedVia so it survives the round-trip and
-        // can be parsed by future Tonight-Mode follow-ups (e.g. clearing
-        // missing chips when these get bought).
+        // category stays the FoodCategory fallback the NOT NULL column needs
+        // (same as MissingIngredientsSheet); aisleSection is what files the
+        // row in the right aisle, which "snack" alone never did.
         GroceryItem(
             id: UUID().uuidString,
             userId: "",
@@ -478,7 +553,8 @@ private extension GroceryItem {
             autoGenerated: false,
             pricePerUnit: nil,
             currency: nil,
-            aisleSection: nil,
+            aisleSection: GroceryAisle.classify(name).rawValue,
+            sourceRecipeId: sourceRecipeId,
             createdAt: nil,
             updatedAt: nil
         )

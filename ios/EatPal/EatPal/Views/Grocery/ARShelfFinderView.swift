@@ -199,11 +199,12 @@ struct ARShelfFinderView: View {
     private func checkOff(barcode: String) async {
         guard let item = appState.groceryItems.first(where: { $0.barcode == barcode && !$0.checked }) else { return }
         do {
-            try await appState.toggleGroceryItem(item.id)
+            // Set, not toggle, so a partner's earlier check isn't undone.
+            try await appState.setGroceryItemChecked(item.id, checked: true)
             HapticManager.success()
             AnalyticsService.track(.arShelfChipTapped(action: "check"))
         } catch {
-            // toggleGroceryItem already surfaces a toast.
+            // setGroceryItemChecked already surfaces a toast.
         }
     }
 

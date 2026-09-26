@@ -148,8 +148,14 @@ enum TonightModeService {
         limit: Int
     ) -> [Suggestion] {
         let pantry = appState.foods
-        let foodById = Dictionary(uniqueKeysWithValues: pantry.map { ($0.id, $0) })
-        let pantryIds = Set(pantry.map(\.id))
+        // Keyed with uniquingKeysWith: two rows sharing an id (a realtime echo
+        // racing an optimistic insert) would trap uniqueKeysWithValues.
+        let foodById = Dictionary(pantry.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        // "Cook with what you have" must not count food that is expired or
+        // used up: those ids stay in foodById (for names and allergen checks)
+        // but are treated as missing, so an expired ingredient is never
+        // presented as on hand for a child's dinner.
+        let pantryIds = Set(pantry.filter { !$0.isExpired && ($0.quantity ?? 1) > 0 }.map(\.id))
         let selectedKids = appState.kids.filter { kidIds.contains($0.id) }
         let recipes = appState.recipes
         let planEntries = appState.planEntries
@@ -196,7 +202,6 @@ enum TonightModeService {
             let coverage = Double(foodIds.count - missing.count) / Double(total)
 
             let kidFits: [KidFit] = selectedKids.map { kid in
-                let kidAllergens = Set((kid.allergens ?? []).map { $0.lowercased() })
                 let dislikedIds = Set(kid.dislikedFoods ?? [])
                 let dislikedNames = Set((kid.dislikedFoods ?? []).map { $0.lowercased() })
 
@@ -204,8 +209,10 @@ enum TonightModeService {
                 var blockingAversions: [String] = []
                 for fid in foodIds {
                     guard let food = foodById[fid] else { continue }
-                    let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
-                    if !foodAllergens.isDisjoint(with: kidAllergens) {
+                    // Canonical match (plurals, "en:" tags, dairy/milk,
+                    // families, the food's name) -- the same rule the edge
+                    // function applies, so the fallback can't be looser.
+                    if AllergenMatcher.hit(for: kid, food: food) != nil {
                         allergenHits.append(food.name)
                         continue
                     }
@@ -269,7 +276,12 @@ enum TonightModeService {
                 pantryCoveragePct: s.pantryCoveragePct,
                 missingFoodIds: s.missingFoodIds,
                 missingIngredients: s.missingFoodIds.map { id in
-                    MissingIngredient(id: id, name: foodById[id]?.name ?? "Missing item")
+                    MissingIngredient(
+                        id: id,
+                        name: foodById[id]?.name
+                            ?? s.recipe.ingredients.first(where: { $0.foodId == id })?.name
+                            ?? "Missing item"
+                    )
                 },
                 kidFit: s.kidFits,
                 varietyScore: s.variety,
@@ -318,14 +330,28 @@ private func withTimeout<T: Sendable>(
 extension TonightModeService {
     /// True when local time is in the 4pm-8pm "panic window" AND no dinner
     /// is planned for today.
-    static func shouldShowPanicCta(now: Date = Date(), planEntries: [PlanEntry]) -> Bool {
+    ///
+    /// `kidIds`, when given, narrows "planned" to those children: one kid's
+    /// dinner no longer hides the card while a sibling has nothing planned.
+    /// Nil keeps the old household-wide check.
+    static func shouldShowPanicCta(
+        now: Date = Date(),
+        planEntries: [PlanEntry],
+        kidIds: [String]? = nil
+    ) -> Bool {
         let comps = Calendar.current.dateComponents([.hour], from: now)
         let hour = comps.hour ?? 0
         guard hour >= 16 && hour < 20 else { return false }
         let today = todayIso(now)
-        return !planEntries.contains { entry in
-            entry.date == today && entry.mealSlot.lowercased() == "dinner"
+        func hasDinner(_ kidId: String?) -> Bool {
+            planEntries.contains { entry in
+                entry.date == today
+                    && entry.mealSlot.lowercased() == "dinner"
+                    && (kidId == nil || entry.kidId == kidId)
+            }
         }
+        guard let kidIds, !kidIds.isEmpty else { return !hasDinner(nil) }
+        return kidIds.contains { !hasDinner($0) }
     }
 
     static func todayIso(_ now: Date = Date()) -> String {

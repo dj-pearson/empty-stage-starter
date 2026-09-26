@@ -4,7 +4,6 @@ struct SettingsView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
     @EnvironmentObject var appState: AppState
     @State private var showingSignOutAlert = false
-    @State private var showingDeleteDataAlert = false
     @State private var showingPaywall = false
     @State private var showingDeleteAccountAlert = false
     @State private var isDeletingAccount = false
@@ -241,7 +240,14 @@ struct SettingsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This permanently deletes your account and all of your data. You can't undo this action.")
+            // M5: say what happens to a shared household and to billing,
+            // which the old copy left the parent to guess.
+            Text(
+                "This permanently deletes your account. You can't undo it.\n\nIn a shared household, your " +
+                "children, plans and lists stay with the other members. If you're the only member, they're " +
+                "deleted too.\n\nDeleting your account doesn't cancel an App Store subscription. Cancel it " +
+                "in Settings > your name > Subscriptions."
+            )
         }
         .alert(
             "Couldn't delete account",

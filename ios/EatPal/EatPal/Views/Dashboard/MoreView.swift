@@ -36,8 +36,121 @@ struct MoreView: View {
 
     var body: some View {
         List {
-            // US-373: Recipes relocated here from the tab bar (Dashboard took
-            // its primary-tab slot). Surfaced first so it stays easy to reach.
+            // M9/M19: the children come first; their allergies and "about"
+            // page are what a co-parent or sitter opens More for.
+            // US-462: value-based links so a deep link / notification tap and a
+            // manual tap resolve through the same navigationDestination map.
+            Section("Family") {
+                ForEach(appState.kids) { kid in
+                    NavigationLink(value: MoreRoute.kidProfile(id: kid.id)) {
+                        MoreKidRow(kid: kid)
+                    }
+                }
+
+                NavigationLink(value: MoreRoute.kids) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Children")
+                                .font(.body)
+                            Text(childrenSubtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "person.2.fill")
+                            .foregroundStyle(.blue)
+                    }
+                }
+                NavigationLink(value: MoreRoute.household) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Household")
+                                .font(.body)
+                            Text("Co-parents and caregivers")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "house.fill")
+                            .foregroundStyle(.indigo)
+                    }
+                }
+            }
+
+            Section("Feeding therapy") {
+                NavigationLink(value: MoreRoute.foodChaining) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Food Chaining")
+                                .font(.body)
+                            Text("Bridge to new foods from favorites")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "link.circle.fill")
+                            .foregroundStyle(.teal)
+                    }
+                }
+                NavigationLink(value: MoreRoute.foodJournal) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Food Journal")
+                                .font(.body)
+                            Text("Every meal, with notes and how much was eaten")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "book.closed.fill")
+                            .foregroundStyle(.teal)
+                    }
+                }
+                NavigationLink(value: MoreRoute.progress) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Progress")
+                                .font(.body)
+                            Text("Exposures, milestones and weekly reports")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "trophy.fill")
+                            .foregroundStyle(.yellow)
+                    }
+                }
+                NavigationLink(value: MoreRoute.foodTracker) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Meal results")
+                                .font(.body)
+                            Text("What was eaten, tasted or left for another day")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "chart.line.uptrend.xyaxis")
+                            .foregroundStyle(.orange)
+                    }
+                }
+                NavigationLink(value: MoreRoute.quiz) {
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Eating Style Quiz")
+                                .font(.body)
+                            Text("Discover your child's eating style")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "questionmark.circle.fill")
+                            .foregroundStyle(.pink)
+                    }
+                }
+            }
+
+            // US-373: Recipes moved here from the tab bar.
             Section {
                 NavigationLink(value: MoreRoute.recipes) {
                     Label {
@@ -55,61 +168,7 @@ struct MoreView: View {
                 }
             }
 
-            // Family
-            // US-462: value-based links so a deep link / notification tap and a
-            // manual tap resolve through the same navigationDestination map.
-            Section("Family") {
-                NavigationLink(value: MoreRoute.kids) {
-                    Label {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Children")
-                                    .font(.body)
-                                Text("\(appState.kids.count) profiles")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                        }
-                    } icon: {
-                        Image(systemName: "person.2.fill")
-                            .foregroundStyle(.blue)
-                    }
-                }
-            }
-
-            // Tools
             Section("Tools") {
-                NavigationLink(value: MoreRoute.foodJournal) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Food Journal")
-                                .font(.body)
-                            Text("Every meal, with notes and how much was eaten")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "book.closed.fill")
-                            .foregroundStyle(.teal)
-                    }
-                }
-
-                NavigationLink(value: MoreRoute.foodTracker) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Food Tracker")
-                                .font(.body)
-                            Text("Track food introduction results")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .foregroundStyle(.orange)
-                    }
-                }
-
                 NavigationLink(value: MoreRoute.insights) {
                     Label {
                         VStack(alignment: .leading, spacing: 2) {
@@ -146,58 +205,13 @@ struct MoreView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("AI Coach")
                                 .font(.body)
-                            Text("Meal coaching and advice")
+                            Text("Meal ideas and mealtime coaching")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } icon: {
                         Image(systemName: "bubble.left.and.text.bubble.right.fill")
                             .foregroundStyle(.green)
-                    }
-                }
-
-                NavigationLink(value: MoreRoute.foodChaining) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Food Chaining")
-                                .font(.body)
-                            Text("Bridge to new foods from favorites")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "link.circle.fill")
-                            .foregroundStyle(.teal)
-                    }
-                }
-
-                NavigationLink(value: MoreRoute.quiz) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Picky Eater Quiz")
-                                .font(.body)
-                            Text("Discover your child's eating style")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "questionmark.circle.fill")
-                            .foregroundStyle(.pink)
-                    }
-                }
-
-                NavigationLink(value: MoreRoute.progress) {
-                    Label {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Progress")
-                                .font(.body)
-                            Text("Achievements and weekly reports")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    } icon: {
-                        Image(systemName: "trophy.fill")
-                            .foregroundStyle(.yellow)
                     }
                 }
             }
@@ -225,7 +239,8 @@ struct MoreView: View {
                 KidsView()
             case .kidProfile(let id):
                 if let kid = appState.kids.first(where: { $0.id == id }) {
-                    KidDetailView(kid: kid)
+                    // Already inside the More tab's NavigationStack.
+                    KidDetailView(kid: kid, embedInNavigationStack: false)
                 } else {
                     KidsView()
                 }
@@ -256,6 +271,42 @@ struct MoreView: View {
     }
 }
 
+extension MoreView {
+    private var childrenSubtitle: String {
+        let n = appState.kids.count
+        if n == 0 { return "Add a child" }
+        return n == 1 ? "1 profile" : "\(n) profiles"
+    }
+}
+
+/// A child in the More hub, with the allergy line a sitter needs first.
+private struct MoreKidRow: View {
+    let kid: Kid
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(kid.name)
+                    .font(.body)
+                if let allergens = kid.allergens, !allergens.isEmpty {
+                    Text(KidAllergySummary.line(for: kid))
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("No allergies recorded")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        } icon: {
+            Text(String(kid.name.prefix(1)).uppercased())
+                .font(.headline)
+                .foregroundStyle(.green)
+        }
+    }
+}
+
 // MARK: - Sync Status Row (US-234)
 
 private struct SyncStatusRow: View {
@@ -264,6 +315,11 @@ private struct SyncStatusRow: View {
     @State private var showingSheet = false
 
     private var subtitle: String {
+        if !network.isConnected {
+            let n = store.pendingMutationCount
+            if n == 0 { return "Offline. Changes will sync when you're back online" }
+            return "Offline. \(n) change\(n == 1 ? "" : "s") waiting to sync"
+        }
         if store.isSyncing { return "Syncing now…" }
         if let err = store.lastSyncError, !err.isEmpty {
             return "Paused — \(err)"
@@ -274,6 +330,7 @@ private struct SyncStatusRow: View {
     }
 
     private var iconColor: Color {
+        if !network.isConnected { return .secondary }
         if store.lastSyncError != nil { return .orange }
         if store.pendingMutationCount > 0 { return .blue }
         return .green
@@ -323,9 +380,12 @@ private struct SyncStatusRow: View {
 struct FoodTrackerView: View {
     @EnvironmentObject var appState: AppState
 
+    /// Scoped to the active child: mixing siblings' results made one
+    /// child's "not today" count read as another's.
     private var recentEntries: [PlanEntry] {
-        appState.planEntries
-            .filter { $0.result != nil }
+        let kidId = appState.activeKidId
+        return appState.planEntries
+            .filter { $0.result != nil && (kidId == nil || $0.kidId == kidId) }
             .sorted { ($0.createdAt ?? "") > ($1.createdAt ?? "") }
     }
 
@@ -340,20 +400,27 @@ struct FoodTrackerView: View {
 
     var body: some View {
         List {
+            if appState.kids.count > 1 {
+                Section {
+                    KidSelectorView()
+                        .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                }
+            }
+
             // Stats Summary
             Section {
                 HStack(spacing: 16) {
                     TrackerStat(label: "Ate", count: stats.ate, color: .green)
                     TrackerStat(label: "Tasted", count: stats.tasted, color: .orange)
-                    TrackerStat(label: "Refused", count: stats.refused, color: .red)
+                    TrackerStat(label: "Not today", count: stats.refused, color: .secondary)
                 }
                 .padding(.vertical, 8)
             }
 
             // Recent Results
-            Section("Recent Results") {
+            Section("Recent results") {
                 if recentEntries.isEmpty {
-                    Text("No tracked results yet")
+                    Text("No meal results logged yet")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(recentEntries.prefix(20)) { entry in
@@ -382,16 +449,12 @@ struct FoodTrackerView: View {
             }
         }
         .listStyle(.insetGrouped)
-        .navigationTitle("Food Tracker")
+        .navigationTitle("Meal results")
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private func resultColor(_ result: MealResult) -> Color {
-        switch result {
-        case .ate: return .green
-        case .tasted: return .orange
-        case .refused: return .red
-        }
+        result.tint
     }
 }
 

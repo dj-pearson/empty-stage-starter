@@ -35,13 +35,17 @@ struct PantryQuickAddBar: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
+                // A plus, not a magnifying glass: this sits under the real
+                // search field, and typing a search here created a food.
+                Image(systemName: "plus.circle")
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
 
                 TextField(
-                    "2 lb chicken — try voice or paste a list",
+                    "Add to pantry (e.g. 2 lb chicken)",
                     text: $text
                 )
+                .accessibilityLabel("Add to pantry")
                 .focused($inputFocused)
                 .submitLabel(.done)
                 .autocorrectionDisabled()
@@ -206,14 +210,18 @@ struct PantryQuickAddBar: View {
             userId: "",
             name: row.name,
             category: row.category.rawValue,
-            isSafe: true,
+            // Safe means "my child reliably eats this"; only a parent can
+            // say that, so nothing is marked safe on the way in.
+            isSafe: false,
             isTryBite: false,
             quantity: row.quantity ?? 1,
             unit: row.unit
         )
 
         do {
-            try await appState.addFood(food)
+            // Merge into an existing row (same name) rather than creating a
+            // duplicate when two phones add "milk".
+            try await appState.mergeOrAddFood(food)
             AnalyticsService.track(
                 .pantryQuickAddSubmitted(parseConfidence: parsed.confidence)
             )

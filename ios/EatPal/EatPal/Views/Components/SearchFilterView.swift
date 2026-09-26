@@ -211,12 +211,16 @@ enum FoodFilterEngine {
         }
 
         // Allergen exclusion
+        // Canonical match, so excluding "milk" also hides a food tagged
+        // "Dairy" or named "Cheddar cheese" (the exact compare kept them).
         if !excludeAllergens.isEmpty {
+            let excluded = Array(excludeAllergens)
             result = result.filter { food in
-                guard let allergens = food.allergens else { return true }
-                let lowered = Set(allergens.map { $0.lowercased() })
-                let excluded = Set(excludeAllergens.map { $0.lowercased() })
-                return lowered.isDisjoint(with: excluded)
+                AllergenMatcher.matching(
+                    kidAllergens: excluded,
+                    foodName: food.name,
+                    foodAllergens: food.allergens
+                ) == nil
             }
         }
 

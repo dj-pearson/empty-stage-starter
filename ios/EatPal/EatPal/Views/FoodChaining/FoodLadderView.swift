@@ -24,9 +24,17 @@ struct FoodLadderView: View {
         rows.contains { $0.ladderStatus == .active }
     }
 
+    @State private var showingStartSheet = false
+    @State private var showingPauseAllConfirm = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // M18: the ladder is per child.
+                if appState.kids.count > 1 {
+                    KidSelectorView()
+                }
+
                 header
 
                 if appState.isLoading && rows.isEmpty {
@@ -52,6 +60,37 @@ struct FoodLadderView: View {
         }
         .navigationTitle("Exposure ladder")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if appState.activeKid != nil {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        showingStartSheet = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .accessibilityLabel("Add a food to the ladder")
+                }
+            }
+        }
+        .sheet(isPresented: $showingStartSheet) {
+            if let kid = appState.activeKid {
+                StartLadderSheet(kid: kid)
+            }
+        }
+        .confirmationDialog(
+            "Pause every food on the ladder?",
+            isPresented: $showingPauseAllConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Pause everything") {
+                if let kidId = appState.activeKidId {
+                    Task { await appState.pauseAllLadders(kidId: kidId) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Nothing will be scheduled until you resume a food. Where each food sits is kept.")
+        }
         .refreshable { await appState.loadKidFoodLadder() }
     }
 
@@ -64,9 +103,9 @@ struct FoodLadderView: View {
             .font(.subheadline)
             .foregroundStyle(.secondary)
 
-            if hasActiveRows, let kidId = appState.activeKidId {
+            if hasActiveRows, appState.activeKidId != nil {
                 Button {
-                    Task { await appState.pauseAllLadders(kidId: kidId) }
+                    showingPauseAllConfirm = true
                 } label: {
                     Label("Pause everything", systemImage: "pause.circle")
                 }
@@ -86,6 +125,17 @@ struct FoodLadderView: View {
             )
             .font(.subheadline)
             .foregroundStyle(.secondary)
+
+            // M13: this used to be a dead end; nothing in the app could put
+            // a food on the ladder.
+            Button {
+                showingStartSheet = true
+            } label: {
+                Label("Choose a food", systemImage: "plus.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.green)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
@@ -174,6 +224,8 @@ private struct LadderRowView: View {
 
     let row: KidFoodLadder
 
+    @State private var showingRemoveConfirm = false
+
     private var foodName: String {
         appState.foods.first { $0.id == row.foodId }?.name ?? "Removed food"
     }
@@ -242,7 +294,7 @@ private struct LadderRowView: View {
                 }
 
                 Button(role: .destructive) {
-                    Task { await appState.removeFromLadder(row) }
+                    showingRemoveConfirm = true
                 } label: {
                     Label("Remove", systemImage: "trash")
                 }
@@ -253,6 +305,121 @@ private struct LadderRowView: View {
             .accessibilityLabel("Options for \(foodName)")
         }
         .padding(.vertical, 12)
+        .confirmationDialog(
+            "Remove \(foodName) from the ladder?",
+            isPresented: $showingRemoveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) {
+                Task { await appState.removeFromLadder(row) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Its step and history on the ladder go with it. Pause keeps them instead.")
+        }
+    }
+}
+
+// MARK: - Start a ladder (M13)
+
+/// Picks a food to put on a child's exposure ladder. Offers foods the child
+/// isn't already working on and that don't carry one of their allergens;
+/// safe foods are left out because the ladder is for new ones, but can be
+/// chosen as the familiar food served alongside.
+struct StartLadderSheet: View {
+    @EnvironmentObject var appState: AppState
+    @Environment(\.dismiss) private var dismiss
+
+    let kid: Kid
+
+    @State private var search = ""
+    @State private var anchorId = ""
+    @State private var isAdding = false
+
+    private var candidates: [Food] {
+        let onLadder = Set(appState.ladderRows(for: kid.id).map { $0.foodId })
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let eligible = appState.foods.filter { food in
+            !food.isSafe
+                && !onLadder.contains(food.id)
+                && AllergenMatcher.hit(for: kid, food: food) == nil
+                && (query.isEmpty || food.name.lowercased().contains(query))
+        }
+        // Try-bite foods first: the parent already flagged them as next up.
+        return eligible.sorted { a, b in
+            if a.isTryBite != b.isTryBite { return a.isTryBite }
+            return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
+        }
+    }
+
+    private var anchors: [Food] {
+        appState.safeFoods.filter { AllergenMatcher.hit(for: kid, food: $0) == nil }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if !anchors.isEmpty {
+                    Section {
+                        Picker("Serve with", selection: $anchorId) {
+                            Text("Nothing yet").tag("")
+                            ForEach(anchors) { food in
+                                Text(food.name).tag(food.id)
+                            }
+                        }
+                    } footer: {
+                        Text("A food \(kid.name) already enjoys, on the plate alongside.")
+                    }
+                }
+
+                Section("Foods to work on") {
+                    if candidates.isEmpty {
+                        Text("No foods to add. New foods you add to the pantry show up here.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(candidates) { food in
+                            Button {
+                                Task { await start(food) }
+                            } label: {
+                                HStack {
+                                    Text(food.name)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    if food.isTryBite {
+                                        Text("Try bite")
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                            .disabled(isAdding)
+                        }
+                    }
+                }
+            }
+            .searchable(text: $search, prompt: "Search foods")
+            .navigationTitle("Start a ladder")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func start(_ food: Food) async {
+        isAdding = true
+        defer { isAdding = false }
+        let ok = await appState.addFoodToLadder(
+            kidId: kid.id,
+            foodId: food.id,
+            pairedSafeFoodId: anchorId.isEmpty ? nil : anchorId
+        )
+        if ok {
+            HapticManager.success()
+            dismiss()
+        }
     }
 }
 

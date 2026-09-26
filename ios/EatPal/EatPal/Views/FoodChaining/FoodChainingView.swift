@@ -14,18 +14,14 @@ struct FoodChainingView: View {
     // allergens, so we warn instead of charting a path toward an allergen.
     @State private var allergenWarning: String?
 
-    /// US-448: lowercased allergen set for the currently-active child.
-    private var activeKidAllergens: Set<String> {
-        guard let kidId = appState.activeKidId,
-              let kid = appState.kids.first(where: { $0.id == kidId }) else { return [] }
-        return Set((kid.allergens ?? []).map { $0.lowercased() })
-    }
+    @State private var isStartingLadder = false
 
-    /// US-448: true when a food carries any allergen the active child reacts to.
+    /// US-448: true when a food carries any allergen the active child reacts
+    /// to. AllergenMatcher rather than an exact string compare, so "Peanuts"
+    /// vs "peanut" and an untagged "Almond butter" are caught.
     private func hasAllergenConflict(_ food: Food) -> Bool {
-        guard !activeKidAllergens.isEmpty else { return false }
-        let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
-        return !foodAllergens.isDisjoint(with: activeKidAllergens)
+        guard let kid = appState.activeKid else { return false }
+        return AllergenMatcher.hit(for: kid, food: food) != nil
     }
 
     /// US-448: foods offered as starting/target options, with anything that
@@ -63,13 +59,18 @@ struct FoodChainingView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                // M18: chains and ladders are per child.
+                if appState.kids.count > 1 {
+                    KidSelectorView()
+                }
+
                 // Explanation
                 VStack(alignment: .leading, spacing: 8) {
                     Label("What is Food Chaining?", systemImage: "link")
                         .font(.headline)
 
                     Text(
-                        "Food chaining helps picky eaters try new foods by creating small, "
+                        "Food chaining helps children try new foods by creating small, "
                         + "gradual steps from foods they already accept to new target foods. "
                         + "Each step changes one small property (texture, flavor, color, or temperature)."
                     )
@@ -214,6 +215,8 @@ struct FoodChainingView: View {
                             .buttonStyle(.bordered)
                             .tint(.blue)
                             .padding(.top, 4)
+
+                            ladderAction(for: target)
                         }
                     }
                 } else if selectedSafeFood != nil && selectedTargetFood != nil {
@@ -243,13 +246,55 @@ struct FoodChainingView: View {
             .padding()
         }
         .navigationTitle("Food Chaining")
+        // A chain built for one child can carry another's allergen.
+        .onChange(of: appState.activeKidId) { _, _ in
+            generateChain()
+        }
+    }
+
+    /// M13: turn the chain into practice. Puts the target on the active
+    /// child's exposure ladder, paired with the starting food as the anchor.
+    @ViewBuilder
+    private func ladderAction(for target: Food) -> some View {
+        if let kidId = appState.activeKidId {
+            if appState.ladderRow(kidId: kidId, foodId: target.id) != nil {
+                Label("\(target.name) is on the exposure ladder", systemImage: "checkmark.circle")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    Task { await startLadder(kidId: kidId, target: target) }
+                } label: {
+                    Label("Start a ladder for \(target.name)", systemImage: "stairs")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
+                .disabled(isStartingLadder)
+            }
+        }
+    }
+
+    private func startLadder(kidId: String, target: Food) async {
+        isStartingLadder = true
+        defer { isStartingLadder = false }
+        let ok = await appState.addFoodToLadder(
+            kidId: kidId,
+            foodId: target.id,
+            pairedSafeFoodId: selectedSafeFood?.id
+        )
+        if ok {
+            HapticManager.success()
+        }
     }
 
     private let tips = [
         "Introduce one change at a time. Don't rush multiple steps.",
         "Let your child explore the food with all senses before tasting.",
         "Offer the new food alongside the accepted food — never replace it.",
-        "Praise interaction with food, even just touching or smelling it.",
+        "Notice any interaction with food, even just touching or smelling it. Every exposure counts.",
         "It may take 10-15 exposures before a child accepts a new food.",
     ]
 

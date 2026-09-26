@@ -7,6 +7,12 @@ struct ProgressDashboardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            // M18: every tab here is per child.
+            if appState.kids.count > 1 {
+                KidSelectorView()
+                    .padding(.top, 8)
+            }
+
             Picker("Section", selection: $selectedTab) {
                 Text("Overview").tag(0)
                 Text("Achievements").tag(1)
@@ -45,8 +51,20 @@ struct ProgressDashboardView: View {
 struct OverviewTab: View {
     @EnvironmentObject var appState: AppState
 
+    /// M14: distinct foods this child ate or tasted. This used to be the
+    /// pantry count, so it went up when a parent went shopping.
     private var totalFoodsTried: Int {
-        appState.foods.count
+        let tried = activeKidEntries.compactMap { entry -> String? in
+            guard entry.result == MealResult.ate.rawValue
+                || entry.result == MealResult.tasted.rawValue else { return nil }
+            return entry.foodId
+        }
+        return Set(tried).count
+    }
+
+    /// Every logged result is an exposure, "not today" included.
+    private var exposureCount: Int {
+        activeKidEntries.filter { $0.result != nil }.count
     }
 
     /// US-446: plan entries for the currently-selected child only, so success
@@ -57,13 +75,6 @@ struct OverviewTab: View {
         let kidId = appState.activeKidId ?? ""
         guard !kidId.isEmpty else { return [] }
         return appState.planEntries.filter { $0.kidId == kidId }
-    }
-
-    private var successRate: Double {
-        let results = activeKidEntries.compactMap(\.result)
-        guard !results.isEmpty else { return 0 }
-        let ateCount = results.filter { $0 == "ate" }.count
-        return Double(ateCount) / Double(results.count) * 100
     }
 
     private var thisWeekMeals: Int {
@@ -96,9 +107,11 @@ struct OverviewTab: View {
                         icon: "leaf.fill",
                         color: .green
                     )
+                    // M14: "Success Rate" (ate / all results) scored the
+                    // child on every "not today". Exposures count instead.
                     ProgressStatCard(
-                        title: "Success Rate",
-                        value: String(format: "%.0f%%", successRate),
+                        title: "Exposures",
+                        value: "\(exposureCount)",
                         icon: "chart.line.uptrend.xyaxis",
                         color: .blue
                     )
@@ -264,7 +277,7 @@ private struct StreakCard: View {
 
     private var headline: String {
         if current == 0 {
-            return "Start a streak!"
+            return "Start a streak"
         }
         if current == 1 {
             return "1 day streak"
@@ -274,12 +287,12 @@ private struct StreakCard: View {
 
     private var subtitle: String {
         if current == 0 {
-            return "Log a try-bite today to begin."
+            return "Log how any meal went today. Every exposure counts."
         }
-        if current >= best {
+        if current >= best && best > 1 {
             return "New personal best for \(kidName)!"
         }
-        return "Best ever: \(best) days"
+        return best == 1 ? "Best ever: 1 day" : "Best ever: \(best) days"
     }
 
     var body: some View {
@@ -567,7 +580,7 @@ struct WeekReportCard: View {
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 WeekStat(label: "Meals Planned", value: "\(report.mealsPlanned)", icon: "fork.knife")
                 WeekStat(label: "Results Logged", value: "\(report.resultsLogged)", icon: "checkmark.circle")
-                WeekStat(label: "Ate Successfully", value: "\(report.ateCount)", icon: "hand.thumbsup.fill")
+                WeekStat(label: "Ate", value: "\(report.ateCount)", icon: "hand.thumbsup.fill")
                 WeekStat(label: "Foods Tried", value: "\(report.newFoodsTried)", icon: "leaf.fill")
             }
         }

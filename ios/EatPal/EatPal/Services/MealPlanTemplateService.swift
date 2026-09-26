@@ -32,24 +32,34 @@ final class MealPlanTemplateService {
         let mealSlot: String
         let foodId: String
         let foodName: String
+        /// The recipe the meal came from. Optional and omitted when nil, so
+        /// templates saved before it existed still decode, and a recipe meal
+        /// no longer comes back as its first ingredient.
+        var recipeId: String? = nil
 
         enum CodingKeys: String, CodingKey {
             case dayIndex = "day_index"
             case mealSlot = "meal_slot"
             case foodId = "food_id"
             case foodName = "food_name"
+            case recipeId = "recipe_id"
         }
     }
 
     // MARK: - Copy Week Plan
 
-    /// Copies all plan entries from one week to another for a given kid.
+    /// Copies all plan entries from one week to another for a given kid and
+    /// returns how many were copied (0 when the source week is empty). The
+    /// caller says what happened: the service used to toast "No meals to
+    /// copy" while the view toasted "Week copied" over it, and on a real copy
+    /// both toasted success.
+    @discardableResult
     func copyWeekPlan(
         from sourceWeekStart: Date,
         to targetWeekStart: Date,
         kidId: String,
         appState: AppState
-    ) async throws {
+    ) async throws -> Int {
         let calendar = Calendar.current
         let sourceDates = (0..<7).map { offset in
             calendar.date(byAdding: .day, value: offset, to: sourceWeekStart)!
@@ -59,10 +69,7 @@ final class MealPlanTemplateService {
             appState.planEntriesForDate(date, kidId: kidId)
         }
 
-        guard !sourceEntries.isEmpty else {
-            toast.warning("No meals to copy", message: "The source week has no planned meals.")
-            return
-        }
+        guard !sourceEntries.isEmpty else { return 0 }
 
         for entry in sourceEntries {
             guard let entryDate = DateFormatter.isoDate.date(from: entry.date) else { continue }
@@ -75,14 +82,15 @@ final class MealPlanTemplateService {
                 kidId: kidId,
                 date: DateFormatter.isoDate.string(from: newDate),
                 mealSlot: entry.mealSlot,
-                foodId: entry.foodId
+                foodId: entry.foodId,
+                // Without this a copied recipe meal became its first ingredient.
+                recipeId: entry.recipeId
             )
 
-            try await appState.addPlanEntry(newEntry)
+            try await appState.addPlanEntry(newEntry, silent: true)
         }
 
-        toast.success("Week copied", message: "Copied \(sourceEntries.count) meals to new week.")
-        HapticManager.success()
+        return sourceEntries.count
     }
 
     // MARK: - Cross-Kid Plan Copy (US-229)
@@ -119,7 +127,6 @@ final class MealPlanTemplateService {
         }
 
         let targetKid = appState.kids.first { $0.id == targetKidId }
-        let targetAllergens = Set((targetKid?.allergens ?? []).map { $0.lowercased() })
 
         var copied = 0
         var skipped = 0
@@ -127,17 +134,15 @@ final class MealPlanTemplateService {
         var copiedRecipeIds: [String] = []
 
         for entry in sourceEntries {
-            // Allergen guard: if the entry's food declares any allergen the
-            // target kid reacts to, skip it and remember which one.
-            if !targetAllergens.isEmpty,
-               let food = appState.foods.first(where: { $0.id == entry.foodId }) {
-                let foodAllergens = Set((food.allergens ?? []).map { $0.lowercased() })
-                let conflict = foodAllergens.intersection(targetAllergens)
-                if !conflict.isEmpty {
-                    skipped += 1
-                    skippedAllergenSet.formUnion(conflict)
-                    continue
-                }
+            // Allergen guard: if any food in the meal (the entry's food and,
+            // for a recipe, every linked ingredient) carries an allergen the
+            // target kid reacts to, skip it and remember which one. Canonical
+            // match, so "Peanuts" hits "peanut" and "almonds" hits tree nuts.
+            if let targetKid,
+               let hit = Self.allergenHit(entry: entry, kid: targetKid, appState: appState) {
+                skipped += 1
+                skippedAllergenSet.insert(hit)
+                continue
             }
 
             let copy = PlanEntry(
@@ -150,7 +155,7 @@ final class MealPlanTemplateService {
                 recipeId: entry.recipeId
             )
             do {
-                try await appState.addPlanEntry(copy)
+                try await appState.addPlanEntry(copy, silent: true)
                 copied += 1
                 if let rid = copy.recipeId, !rid.isEmpty {
                     copiedRecipeIds.append(rid)
@@ -184,9 +189,22 @@ final class MealPlanTemplateService {
         for entry in entries {
             try await appState.deletePlanEntry(entry.id)
         }
+        // No toast here: the caller shows one "Week cleared" with Undo, which
+        // a second toast from here used to queue behind.
+    }
 
-        toast.success("Week cleared", message: "Removed \(entries.count) meals.")
-        HapticManager.mediumImpact()
+    /// The first allergen `kid` reacts to in any food of the entry: its own
+    /// food plus, for a recipe, the recipe's linked foods. Nil when clear.
+    static func allergenHit(entry: PlanEntry, kid: Kid, appState: AppState) -> String? {
+        var ids = [entry.foodId]
+        if let rid = entry.recipeId, let recipe = appState.recipes.first(where: { $0.id == rid }) {
+            ids += recipe.foodIds + recipe.ingredients.compactMap(\.foodId)
+        }
+        for id in ids {
+            guard let food = appState.foods.first(where: { $0.id == id }) else { continue }
+            if let hit = AllergenMatcher.hit(for: kid, food: food) { return hit }
+        }
+        return nil
     }
 
     // MARK: - Templates
@@ -212,7 +230,8 @@ final class MealPlanTemplateService {
                     dayIndex: dayIndex,
                     mealSlot: entry.mealSlot,
                     foodId: entry.foodId,
-                    foodName: foodName
+                    foodName: foodName,
+                    recipeId: entry.recipeId
                 ))
             }
         }
@@ -262,9 +281,10 @@ final class MealPlanTemplateService {
                 kidId: kidId,
                 date: DateFormatter.isoDate.string(from: date),
                 mealSlot: meal.mealSlot,
-                foodId: meal.foodId
+                foodId: meal.foodId,
+                recipeId: meal.recipeId
             )
-            try await appState.addPlanEntry(entry)
+            try await appState.addPlanEntry(entry, silent: true)
         }
 
         toast.success("Template applied", message: "\(template.name) applied to the week.")

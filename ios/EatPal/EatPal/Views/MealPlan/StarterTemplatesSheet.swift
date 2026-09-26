@@ -124,7 +124,10 @@ private struct StarterTemplateDetailSheet: View {
     private var groupedByDay: [(dayIndex: Int, meals: [StarterMealPlanService.StarterMeal])] {
         let dict = Dictionary(grouping: template.meals, by: { $0.dayIndex })
         return dict.keys.sorted().map { day in
-            let sorted = (dict[day] ?? []).sorted { $0.mealSlot < $1.mealSlot }
+            // Day order, not alphabetical (which put Dinner before Lunch).
+            let order = MealPlanView.slotsInDayOrder.map(\.rawValue)
+            let rank: (String) -> Int = { order.firstIndex(of: $0) ?? order.count }
+            let sorted = (dict[day] ?? []).sorted { rank($0.mealSlot) < rank($1.mealSlot) }
             return (day, sorted)
         }
     }

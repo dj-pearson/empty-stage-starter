@@ -1,14 +1,38 @@
 import SwiftUI
 
-/// US-293: Dashboard panic-button card. When it's late afternoon/evening
-/// AND no dinner is planned, this is the loudest thing on the screen.
+/// US-293: Dashboard dinner card. When it's late afternoon/evening AND a
+/// kid has no dinner planned, it's the prominent card on the screen.
 /// Otherwise it shows as a small "Need ideas for tonight?" affordance.
+///
+/// The copy is deliberately calm. "Dinner in 20 minutes." under a flame read
+/// as a countdown from 4pm onward, and that 5pm anxiety is exactly what
+/// spills onto a child who struggles at the table.
 struct TonightModeCard: View {
     @EnvironmentObject var appState: AppState
     @State private var showingSheet = false
+    /// Re-read once a minute so a screen left open at 3:59pm switches over
+    /// at 4pm, and back at 8pm, without waiting for some other re-render.
+    @State private var now = Date()
+    private let tick = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
     private var showPanic: Bool {
-        TonightModeService.shouldShowPanicCta(planEntries: appState.planEntries)
+        // Per kid: one child's dinner no longer hides the card while a
+        // sibling has nothing planned.
+        TonightModeService.shouldShowPanicCta(
+            now: now,
+            planEntries: appState.planEntries,
+            kidIds: appState.kids.map(\.id)
+        )
+    }
+
+    /// Kids with nothing planned for dinner today, for the card's copy.
+    private var kidsWithoutDinner: [Kid] {
+        let today = TonightModeService.todayIso(now)
+        return appState.kids.filter { kid in
+            !appState.planEntries.contains {
+                $0.kidId == kid.id && $0.date == today && $0.mealSlot.lowercased() == "dinner"
+            }
+        }
     }
 
     var body: some View {
@@ -21,6 +45,7 @@ struct TonightModeCard: View {
                 inlineButton
             }
         }
+        .onReceive(tick) { now = $0 }
         .sheet(isPresented: $showingSheet, onDismiss: trackDismissed) {
             TonightSuggestionsSheet()
                 .environmentObject(appState)
@@ -39,21 +64,13 @@ struct TonightModeCard: View {
 
     private var panicCard: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "flame.fill")
-                    .font(.title2)
-                    .foregroundStyle(.orange)
-                Text("Tonight Mode")
-                    .font(.caption.bold())
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.orange.opacity(0.15), in: Capsule())
-                    .foregroundStyle(.orange)
-            }
+            Label("Dinner tonight", systemImage: "fork.knife")
+                .font(.caption.bold())
+                .foregroundStyle(.orange)
 
-            Text("Dinner in 20 minutes.")
-                .font(.title2.bold())
-            Text("No plan? We'll pick 3 things you can cook with what you have right now.")
+            Text(headline)
+                .font(.title3.bold())
+            Text("Here are 3 easy ideas from what's in your pantry, checked against everyone's allergies.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -72,18 +89,16 @@ struct TonightModeCard: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(
-                colors: [Color.orange.opacity(0.18), Color.pink.opacity(0.08)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 16)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(.orange.opacity(0.3), lineWidth: 1)
-        )
+        .background(Color.orange.opacity(0.10), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private var headline: String {
+        let missing = kidsWithoutDinner
+        if missing.isEmpty || missing.count == appState.kids.count {
+            return "No dinner planned yet"
+        }
+        let names = missing.map(\.name).joined(separator: ", ")
+        return "No dinner planned yet for \(names)"
     }
 
     private var inlineButton: some View {
