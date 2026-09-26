@@ -532,10 +532,38 @@ final class AppState: ObservableObject {
                 by: candidate.quantity ?? 1,
                 unit: candidate.unit
             )
+            await carryOverFreshDetails(from: candidate, into: existing)
             return true
         }
         try await addFood(candidate)
         return false
+    }
+
+    /// A merged add brings stock, and it can also bring information the old
+    /// row lacks: a fresh carton merged into an expired row used to stay
+    /// "Expired", and allergens from a new scan were thrown away. Adds any new
+    /// allergen tags and moves the expiry forward when the new one is later
+    /// (or the old one is past). Best effort: stock already landed.
+    private func carryOverFreshDetails(from candidate: Food, into existing: Food) async {
+        var updates = FoodUpdate()
+        var changed = false
+
+        let known = Set((existing.allergens ?? []).map { AllergenMatcher.canonical($0) })
+        let added = (candidate.allergens ?? []).filter { !known.contains(AllergenMatcher.canonical($0)) }
+        if !added.isEmpty {
+            updates.allergens = (existing.allergens ?? []) + added
+            changed = true
+        }
+
+        // ISO dates compare as strings; only ever move the date forward.
+        if let newExpiry = candidate.expiryDate, (existing.expiryDate ?? "") < newExpiry {
+            updates.expiryDate = newExpiry
+            changed = true
+        }
+
+        guard changed, let idx = foods.firstIndex(where: { $0.id == existing.id }) else { return }
+        foods[idx].apply(updates)
+        try? await dataService.updateFood(existing.id, updates: updates)
     }
 
     func updateFood(_ id: String, updates: FoodUpdate) async throws {
@@ -836,12 +864,17 @@ final class AppState: ObservableObject {
 
     // MARK: - Plan Entry Operations
 
-    func addPlanEntry(_ entry: PlanEntry) async throws {
+    /// `silent` skips the per-row success toast and haptic for bulk callers
+    /// (copy week, templates, repeat), which say what happened once
+    /// themselves; otherwise N toasts queue up and bury their Undo.
+    func addPlanEntry(_ entry: PlanEntry, silent: Bool = false) async throws {
         planEntries.append(entry)
         do {
             try await dataService.insertPlanEntry(entry)
-            toast.success("Meal added to plan")
-            HapticManager.success()
+            if !silent {
+                toast.success("Meal added to plan")
+                HapticManager.success()
+            }
             AnalyticsService.track(.mealPlanned(slot: entry.mealSlot, kidId: entry.kidId))
         } catch {
             if isNetworkError(error) {
@@ -870,7 +903,7 @@ final class AppState: ObservableObject {
         do {
             try await dataService.updatePlanEntry(id, updates: updates)
             if let result = updates.result {
-                toast.success("Result logged", message: "Marked as \(result)")
+                toast.success("Result logged", message: "Marked as \(MealResult(rawValue: result)?.displayName ?? result)")
                 AnalyticsService.track(.mealResultLogged(
                     result: result,
                     kidId: planEntries[index].kidId,
@@ -1632,12 +1665,15 @@ final class AppState: ObservableObject {
 
     // MARK: - Grocery Operations
 
-    func addGroceryItem(_ item: GroceryItem) async throws {
+    /// `silent`: as for addPlanEntry, for callers adding several at once.
+    func addGroceryItem(_ item: GroceryItem, silent: Bool = false) async throws {
         groceryItems.append(item)
         do {
             try await dataService.insertGroceryItem(item)
-            toast.success("Item added", message: "\(item.name) added to list")
-            HapticManager.success()
+            if !silent {
+                toast.success("Item added", message: "\(item.name) added to list")
+                HapticManager.success()
+            }
             // Map the GroceryItem.addedVia string back to the typed enum so
             // the analytics event keeps the same vocabulary across web/iOS.
             AnalyticsService.track(.groceryItemAdded(via: Self.entrySource(item.addedVia)))
@@ -1726,6 +1762,37 @@ final class AppState: ObservableObject {
                 throw error
             }
         }
+    }
+
+    /// Deletes a grocery item and offers Undo, which puts the row (same id)
+    /// and its recipe links back. A swipe or long-press delete used to be
+    /// unrecoverable, which on a shared list means a partner's item is gone.
+    func deleteGroceryItemWithUndo(_ id: String) async {
+        guard let item = groceryItems.first(where: { $0.id == id }) else { return }
+        let sources = groceryItemSources.filter { $0.groceryItemId == id }
+        do {
+            try await deleteGroceryItem(id)
+        } catch {
+            return // deleteGroceryItem rolled back and toasted.
+        }
+        toast.show(Toast(
+            type: .success,
+            title: "Removed \(item.name)",
+            duration: 5,
+            actionLabel: "Undo",
+            retry: { [weak self] in
+                guard let self else { return }
+                do {
+                    try await self.addGroceryItem(item, silent: true)
+                    if !sources.isEmpty {
+                        try? await self.dataService.insertGroceryItemSources(sources)
+                        self.groceryItemSources.append(contentsOf: sources)
+                    }
+                } catch {
+                    // addGroceryItem toasted the failure.
+                }
+            }
+        ))
     }
 
     func toggleGroceryItem(_ id: String) async throws {
@@ -1937,7 +2004,9 @@ final class AppState: ObservableObject {
                     userId: "",
                     name: item.name,
                     category: item.category,
-                    isSafe: true,
+                    // Bought is not the same as "my child eats it": coffee
+                    // and paper towels became safe foods.
+                    isSafe: false,
                     isTryBite: false,
                     aisle: item.aisle,
                     quantity: item.quantity,

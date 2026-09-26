@@ -133,7 +133,7 @@ struct FoodResultsChart: View {
         return [
             ("Ate", grouped["ate"]?.count ?? 0, AppTheme.Colors.success),
             ("Tasted", grouped["tasted"]?.count ?? 0, AppTheme.Colors.warning),
-            ("Refused", grouped["refused"]?.count ?? 0, AppTheme.Colors.danger),
+            ("Not today", grouped["refused"]?.count ?? 0, Color.secondary),
         ].filter { $0.1 > 0 }
     }
 

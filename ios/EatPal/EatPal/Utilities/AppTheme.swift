@@ -75,7 +75,8 @@ enum AppTheme {
             switch result {
             case "ate": return success
             case "tasted": return warning
-            case "refused": return danger
+            // Neutral, not danger: see MealResult.
+            case "refused": return .secondary
             default: return .secondary
             }
         }
@@ -130,5 +131,19 @@ enum AppTheme {
         static let lg: CGFloat = 24
         static let xl: CGFloat = 32
         static let xxl: CGFloat = 48
+    }
+}
+
+// MARK: - Meal result tint
+
+extension MealResult {
+    /// One colour per result for every badge and chip. "Not today" is
+    /// neutral on purpose: see MealResult.
+    var tint: Color {
+        switch self {
+        case .ate: return .green
+        case .tasted: return .orange
+        case .refused: return .secondary
+        }
     }
 }

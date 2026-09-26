@@ -11,6 +11,10 @@ struct TonightCookSheet: View {
     @State private var stepIndex = 0
     @State private var timerSeconds = 0
     @State private var timerRunning = false
+    /// When a running timer finishes. The per-second tick only redraws from
+    /// this, so a timer keeps counting while the app is in the background
+    /// (a decrementing counter froze there).
+    @State private var timerEnd: Date?
     @State private var startedAt = Date()
     @State private var voiceEnabled = false
 
@@ -39,11 +43,12 @@ struct TonightCookSheet: View {
             UIApplication.shared.isIdleTimerDisabled = false
             speech.stop()
         }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
-            guard timerRunning, timerSeconds > 0 else { return }
-            timerSeconds -= 1
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now in
+            guard timerRunning, let end = timerEnd else { return }
+            timerSeconds = max(0, Int(end.timeIntervalSince(now).rounded(.up)))
             if timerSeconds == 0 {
                 timerRunning = false
+                timerEnd = nil
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         }
@@ -64,7 +69,8 @@ struct TonightCookSheet: View {
                 Text(recipe.name)
                     .font(.headline)
                 Spacer()
-                Button { complete() } label: {
+                // Leaving is not finishing: only "Done cooking" logs completion.
+                Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.title2)
                 }
@@ -151,18 +157,27 @@ struct TonightCookSheet: View {
             Image(systemName: "timer")
             Text(formatTimer(timerSeconds))
                 .font(.system(.title3, design: .monospaced))
-                .accessibilityLabel("Timer \(timerSeconds) seconds")
+                .accessibilityLabel(timerAccessibilityLabel)
             ForEach([60, 300, 600], id: \.self) { secs in
+                // The label says "+", so it adds to what's left.
                 Button("+\(secs / 60)m") {
-                    timerSeconds = secs
+                    timerSeconds += secs
+                    timerEnd = Date().addingTimeInterval(TimeInterval(timerSeconds))
                     timerRunning = true
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .accessibilityLabel("Add \(secs / 60) minute\(secs == 60 ? "" : "s")")
             }
             if timerSeconds > 0 {
                 Button {
-                    timerRunning.toggle()
+                    if timerRunning {
+                        timerRunning = false
+                        timerEnd = nil
+                    } else {
+                        timerEnd = Date().addingTimeInterval(TimeInterval(timerSeconds))
+                        timerRunning = true
+                    }
                 } label: {
                     Image(systemName: timerRunning ? "pause.fill" : "play.fill")
                 }
@@ -182,11 +197,19 @@ struct TonightCookSheet: View {
 
     private var isLastStep: Bool { stepIndex >= steps.count - 1 }
 
+    private var timerAccessibilityLabel: String {
+        let m = timerSeconds / 60
+        let s = timerSeconds % 60
+        if m == 0 { return "Timer \(s) second\(s == 1 ? "" : "s")" }
+        return "Timer \(m) minute\(m == 1 ? "" : "s") \(s) second\(s == 1 ? "" : "s")"
+    }
+
     private func goNext() {
         guard !isLastStep else { return }
         stepIndex += 1
         timerSeconds = 0
         timerRunning = false
+        timerEnd = nil
         speakIfNeeded()
     }
 
@@ -195,6 +218,7 @@ struct TonightCookSheet: View {
         stepIndex -= 1
         timerSeconds = 0
         timerRunning = false
+        timerEnd = nil
         speakIfNeeded()
     }
 

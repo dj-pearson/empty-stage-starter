@@ -41,8 +41,8 @@ private struct MealRowView: View {
         case "breakfast": return "Breakfast"
         case "lunch":     return "Lunch"
         case "dinner":    return "Dinner"
-        case "snack1":    return "Snack 1"
-        case "snack2":    return "Snack 2"
+        case "snack1":    return "Morning snack"
+        case "snack2":    return "Afternoon snack"
         default:          return meal.slot.capitalized
         }
     }

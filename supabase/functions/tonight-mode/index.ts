@@ -5,6 +5,7 @@ import { publicMessage } from '../_shared/errors.ts';
 import {
   kidFitFor,
   parseLeadingNumber,
+  isOnHand,
   tonightScope,
   tonightScopeFilter,
   varietyScore,
@@ -152,7 +153,7 @@ export default async (req: Request) => {
       .split('T')[0];
 
     const [foodsRes, recipesRes, kidsRes, planRes] = await Promise.all([
-      supabase.from('foods').select('id,name,allergens').or(scopeFilter),
+      supabase.from('foods').select('id,name,allergens,quantity,expiry_date').or(scopeFilter),
       supabase
         .from('recipes')
         .select('id,name,image_url,food_ids,total_time_minutes,prep_time')
@@ -186,7 +187,8 @@ export default async (req: Request) => {
     const planEntries = (planRes.data ?? []) as PlanEntryRow[];
 
     const foodById = new Map(foods.map((f) => [f.id, f]));
-    const pantryIds = new Set(foods.map((f) => f.id));
+    const today = new Date().toISOString().split('T')[0];
+    const pantryIds = new Set(foods.filter((f) => isOnHand(f, today)).map((f) => f.id));
 
     // Variety: recency-weighted count of how often a recipe was planned.
     const now = Date.now();

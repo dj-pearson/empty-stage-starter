@@ -96,8 +96,8 @@ enum MealSlot: String, CaseIterable {
         case .breakfast: return "Breakfast"
         case .lunch: return "Lunch"
         case .dinner: return "Dinner"
-        case .snack1: return "Snack 1"
-        case .snack2: return "Snack 2"
+        case .snack1: return "Morning snack"
+        case .snack2: return "Afternoon snack"
         case .tryBite: return "Try Bite"
         }
     }
@@ -114,20 +114,29 @@ enum MealSlot: String, CaseIterable {
     }
 }
 
+/// What happened at a meal. The raw values are the database's and never
+/// change; the labels are for parents. A declined food is shown as "Not
+/// today" in a neutral colour, not a red "Refused" cross: feeding therapy
+/// (ARFID, sensory aversion) counts an exposure as progress whether or not
+/// it was eaten, and the ladder's own quick-log already says "Not today".
 enum MealResult: String, CaseIterable {
     case ate
     case tasted
     case refused
 
     var displayName: String {
-        rawValue.capitalized
+        switch self {
+        case .ate: return "Ate"
+        case .tasted: return "Tasted"
+        case .refused: return "Not today"
+        }
     }
 
     var icon: String {
         switch self {
         case .ate: return "checkmark.circle.fill"
         case .tasted: return "hand.thumbsup.fill"
-        case .refused: return "xmark.circle.fill"
+        case .refused: return "moon.zzz.fill"
         }
     }
 
@@ -135,7 +144,7 @@ enum MealResult: String, CaseIterable {
         switch self {
         case .ate: return "green"
         case .tasted: return "orange"
-        case .refused: return "red"
+        case .refused: return "gray"
         }
     }
 }
