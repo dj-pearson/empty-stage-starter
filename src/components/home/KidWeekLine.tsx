@@ -10,7 +10,7 @@ import "@/i18n/appLocale";
 
 /**
  * One plain line per kid about the last seven days, plus the food they are
- * furthest along with on the exposure ladder, and the try-bite streak when
+ * furthest along with on the exposure ladder, and the logging streak when
  * there is one (the shared rule in streakRules.ts, same as ProgressDashboard). No tiles, charts or animation:
  * this sits at the bottom of the home screen and should read in a glance.
  */
@@ -43,7 +43,7 @@ export const KidWeekLine = memo(function KidWeekLine() {
           const p = progress.get(kid.id);
           const parts: string[] = [];
           const streak = currentStreak(planEntries, kid.id, { todayKey });
-          if (streak > 0) parts.push(t("home.week.streak", { defaultValue: "{{count}}-day try-bite streak", count: streak }));
+          if (streak > 0) parts.push(t("home.week.streak", { defaultValue: "{{count}} days logged in a row", count: streak }));
           if (p?.newFoodsTried) parts.push(t("home.week.tried", { defaultValue: "Tried {{count}} new foods", count: p.newFoodsTried }));
           if (p?.ate) parts.push(t("home.week.ate", { defaultValue: "{{count}} ate", count: p.ate }));
           if (p?.tasted) parts.push(t("home.week.tasted", { defaultValue: "{{count}} tasted", count: p.tasted }));

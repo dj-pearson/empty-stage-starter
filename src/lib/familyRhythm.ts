@@ -6,7 +6,7 @@
  * eating. Feeding therapy that follows responsive feeding treats pressure and
  * food rewards as counterproductive, so a refusal logged is worth exactly as
  * much as a clean plate: it is an offer, and offers are what move a food.
- * The try-bite streak in streakRules.ts measures the child; this does not
+ * The per-child streak in streakRules.ts is a different rule; this does not
  * replace it and does not share its rule.
  *
  * Source of truth is food_attempts alone. Every logged plan result already

@@ -1,7 +1,7 @@
 import { addIsoDays, toISODate } from '@/lib/date-utils';
 
 /**
- * One try-bite streak rule, for the whole product (US-781).
+ * One per-child streak rule, for the whole product (US-781).
  *
  * There were three, over the same plan entries, and they returned different
  * numbers for the same child:
@@ -16,32 +16,22 @@ import { addIsoDays, toISODate } from '@/lib/date-utils';
  * a broken one on the phone, and the two web numbers disagreed with each other
  * as well.
  *
- * THE DECISION, recorded in PLATFORMS.md: the phone's rule wins. Two reasons.
- * iOS is what is shipped in the App Store, so matching it changes a number on
- * the web rather than changing one a parent has already been watching on their
- * phone. And a streak that survives a day of pure refusals is not counting
- * try-bites; it is counting that the app was opened.
- *
- * The kinder reading -- a refusal does not break it -- is one constant away,
- * below, if the product decides a discouraged parent matters more than the
- * measurement. That is the whole difference between the two.
+ * THE DECISION, recorded in PLATFORMS.md: the phone's rule wins, because iOS
+ * is what ships in the App Store. The phone's rule then changed (M12 in
+ * BadgeService.swift): any logged result counts, a refusal included. Offering
+ * a food and writing down how it went IS the exposure, and a streak that a
+ * hard day could break taught parents to stop logging hard days, which are
+ * the days a feeding therapist most wants to see. This follows it again.
  */
 
-/** Does a day of nothing but refusals end the streak? iOS says yes. */
-export const REFUSAL_BREAKS_STREAK = true;
-
 /**
- * Empty days forgiven in a row before the streak ends. One, on every existing
- * rule that forgave anything at all: a family that misses a Tuesday has not
- * stopped.
+ * Empty days forgiven in a row before the streak ends. One, as on the phone:
+ * a family that misses a Tuesday has not stopped.
  */
 export const EMPTY_DAYS_FORGIVEN = 1;
 
 /** How far back to walk. A year is longer than any streak worth displaying. */
 export const MAX_STREAK_DAYS = 365;
-
-/** A try-bite actually happened. */
-const PRODUCTIVE = new Set(['ate', 'tasted']);
 
 /** The shape the rule needs; both clients' entries are wider than this. */
 export interface StreakEntry {
@@ -54,7 +44,6 @@ export interface StreakEntry {
 export interface StreakOptions {
   /** Defaults to today. Injected in tests, and by anything replaying history. */
   todayKey?: string;
-  refusalBreaks?: boolean;
   emptyDaysForgiven?: number;
 }
 
@@ -62,7 +51,7 @@ const entryKid = (entry: StreakEntry): string | null | undefined =>
   entry.kid_id ?? entry.kidId;
 
 /**
- * The current try-bite streak for one child.
+ * The current streak for one child: days in a row with any result logged.
  *
  * `kidId` is required and not optional on purpose. Home.tsx computed its
  * streak over the UNFILTERED entries while the filtered list sat one line
@@ -76,7 +65,6 @@ export function currentStreak(
   options: StreakOptions = {},
 ): number {
   const todayKey = options.todayKey ?? toISODate(new Date());
-  const refusalBreaks = options.refusalBreaks ?? REFUSAL_BREAKS_STREAK;
   const forgiven = options.emptyDaysForgiven ?? EMPTY_DAYS_FORGIVEN;
 
   // Day key -> the results recorded that day, for this child only.
@@ -105,17 +93,9 @@ export function currentStreak(
       continue;
     }
 
-    if (results.some((r) => PRODUCTIVE.has(r))) {
-      streak++;
-      skipsLeft = forgiven; // a productive day restores the budget
-      continue;
-    }
-
-    if (refusalBreaks && results.includes('refused')) break;
-
-    // Recorded, but nothing was tried. Spends a skip rather than counting.
-    if (skipsLeft > 0) skipsLeft--;
-    else break;
+    // Any result counts, refusals included (M12).
+    streak++;
+    skipsLeft = forgiven; // a logged day restores the budget
   }
 
   return streak;

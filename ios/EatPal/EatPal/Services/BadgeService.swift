@@ -408,25 +408,30 @@ struct BadgeContext {
         planEntries.filter { $0.kidId == kidId }
     }
 
-    /// Distinct food IDs the kid has logged a `tasted`-or-better result for.
-    var triedFoodIds: Set<String> {
+    /// Distinct food IDs offered to the kid with any result logged, a refusal
+    /// included.
+    ///
+    /// These badges used to count only `ate` or `tasted`, which rewarded the
+    /// child for eating. Feeding therapy that follows responsive feeding
+    /// treats that as pressure, and it taught parents that a refusal was
+    /// worth nothing. An offer logged honestly is the exposure; it is what
+    /// moves a food, so it is what the variety badges count. Ids are kept,
+    /// so a badge already earned stays earned.
+    var offeredFoodIds: Set<String> {
         Set(kidEntries.compactMap { entry -> String? in
-            guard let result = entry.result,
-                  result == MealResult.ate.rawValue || result == MealResult.tasted.rawValue
-            else { return nil }
-            return entry.foodId
+            entry.result == nil ? nil : entry.foodId
         })
     }
 
-    /// Distinct categories among foods the kid has tried.
-    var triedCategories: Set<String> {
-        let tried = triedFoodIds
-        return Set(foods.filter { tried.contains($0.id) }.map(\.category))
+    /// Distinct categories among foods offered to the kid.
+    var offeredCategories: Set<String> {
+        let offered = offeredFoodIds
+        return Set(foods.filter { offered.contains($0.id) }.map(\.category))
     }
 
-    func triedCount(in category: FoodCategory) -> Int {
-        let tried = triedFoodIds
-        return foods.filter { tried.contains($0.id) && $0.category == category.rawValue }.count
+    func offeredCount(in category: FoodCategory) -> Int {
+        let offered = offeredFoodIds
+        return foods.filter { offered.contains($0.id) && $0.category == category.rawValue }.count
     }
 }
 
@@ -443,10 +448,10 @@ enum Badge: String, CaseIterable, Identifiable {
     case firstTryBite
     case fiveDayStreak
     case tenDayStreak
-    case categoryExplorer       // foods tried in 5+ categories
-    case vegetableExplorer      // 10 distinct veg
-    case fruitExplorer          // 10 distinct fruit
-    case proteinPro             // 10 distinct protein
+    case categoryExplorer       // foods offered in 5+ categories
+    case vegetableExplorer      // 10 distinct veg offered
+    case fruitExplorer          // 10 distinct fruit offered
+    case proteinPro             // 10 distinct protein offered
     case weekWarrior            // 7+ result entries
     case consistentTracker      // 30+ result entries
     case recipeChef             // 5+ recipes
@@ -459,13 +464,13 @@ enum Badge: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .firstTryBite:      return "First Try-Bite"
+        case .firstTryBite:      return "First Offer"
         case .fiveDayStreak:     return "5-Day Streak"
         case .tenDayStreak:      return "10-Day Streak"
         case .categoryExplorer:  return "Category Explorer"
         case .vegetableExplorer: return "Vegetable Explorer"
         case .fruitExplorer:     return "Fruit Explorer"
-        case .proteinPro:        return "Protein Pro"
+        case .proteinPro:        return "Protein Explorer"
         case .weekWarrior:       return "Week Warrior"
         case .consistentTracker: return "Consistent Tracker"
         case .recipeChef:        return "Recipe Chef"
@@ -477,13 +482,13 @@ enum Badge: String, CaseIterable, Identifiable {
     /// Single-line description shown on the badge tile.
     var description: String {
         switch self {
-        case .firstTryBite:      return "Tried a new food"
+        case .firstTryBite:      return "Offered a food and logged how it went"
         case .fiveDayStreak:     return "5 days of logged meals in a row"
         case .tenDayStreak:      return "10 days of logged meals in a row"
-        case .categoryExplorer:  return "Tried foods from 5 categories"
-        case .vegetableExplorer: return "10 different vegetables 🥦"
-        case .fruitExplorer:     return "10 different fruits 🍎"
-        case .proteinPro:        return "10 different proteins 🥩"
+        case .categoryExplorer:  return "Offered foods from 5 categories"
+        case .vegetableExplorer: return "Offered 10 different vegetables 🥦"
+        case .fruitExplorer:     return "Offered 10 different fruits 🍎"
+        case .proteinPro:        return "Offered 10 different proteins 🥩"
         case .weekWarrior:       return "Logged 7 meal results"
         case .consistentTracker: return "Logged 30 meal results"
         case .recipeChef:        return "Created 5 recipes"
@@ -538,19 +543,19 @@ enum Badge: String, CaseIterable, Identifiable {
     func criteria(_ ctx: BadgeContext) -> Bool {
         switch self {
         case .firstTryBite:
-            return !ctx.triedFoodIds.isEmpty
+            return !ctx.offeredFoodIds.isEmpty
         case .fiveDayStreak:
             return ctx.currentStreak >= 5
         case .tenDayStreak:
             return ctx.currentStreak >= 10
         case .categoryExplorer:
-            return ctx.triedCategories.count >= 5
+            return ctx.offeredCategories.count >= 5
         case .vegetableExplorer:
-            return ctx.triedCount(in: .vegetable) >= 10
+            return ctx.offeredCount(in: .vegetable) >= 10
         case .fruitExplorer:
-            return ctx.triedCount(in: .fruit) >= 10
+            return ctx.offeredCount(in: .fruit) >= 10
         case .proteinPro:
-            return ctx.triedCount(in: .protein) >= 10
+            return ctx.offeredCount(in: .protein) >= 10
         case .weekWarrior:
             return ctx.kidEntries.filter { $0.result != nil }.count >= 7
         case .consistentTracker:

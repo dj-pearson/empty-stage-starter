@@ -54,8 +54,8 @@
     },
     "week": {
       "title": "This week",
-      "streak_one": "{{count}}-day try-bite streak",
-      "streak_other": "{{count}}-day try-bite streak",
+      "streak_one": "{{count}} day logged in a row",
+      "streak_other": "{{count}} days logged in a row",
       "tried_one": "Tried {{count}} new food",
       "tried_other": "Tried {{count}} new foods",
       "ate_one": "{{count}} ate",

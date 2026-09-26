@@ -97,15 +97,24 @@ final class SiriMealBadgeTests: XCTestCase {
         )
     }
 
-    func testASiriLogThatMeetsNoCriteriaEarnsNothing() {
-        // A refusal is a real log and still progress worth recording, but it
-        // is not a try-bite and must not award one.
+    func testASiriLogWithNoResultEarnsNothing() {
+        // A meal planned but not yet logged is not an offer.
+        let planned = entry(foodId: "food-1", result: nil)
+
+        BadgeService.shared.evaluate(kidId: kidId, foods: [], recipes: [], planEntries: [planned])
+
+        XCTAssertTrue(BadgeService.shared.earnedIds(forKid: kidId).isEmpty)
+        XCTAssertNil(BadgeService.shared.pendingCelebration)
+    }
+
+    func testALoggedRefusalEarnsTheFirstOffer() {
+        // The badges count offers, not bites. A refusal logged honestly is an
+        // exposure, and rewarding only a clean plate is pressure to eat.
         let refused = entry(foodId: "food-1", result: MealResult.refused.rawValue)
 
         BadgeService.shared.evaluate(kidId: kidId, foods: [], recipes: [], planEntries: [refused])
 
-        XCTAssertTrue(BadgeService.shared.earnedIds(forKid: kidId).isEmpty)
-        XCTAssertNil(BadgeService.shared.pendingCelebration)
+        XCTAssertTrue(BadgeService.shared.hasEarned(.firstTryBite, kidId: kidId))
     }
 
     // MARK: - AC2: the entries the evaluation sees

@@ -59,6 +59,38 @@ describe('badge catalog parity: TypeScript vs Swift', () => {
     expect(BADGE_CATALOG.filter((b) => b.household).map((b) => b.id)).toEqual(['recipeChef']);
   });
 
+  it('names and describes every badge the way the phone does', () => {
+    // The copy lives in two places (Swift literals, the web locale file). The
+    // phone's descriptions carry an emoji the web leaves off; that aside they
+    // must read the same, or a parent sees two different badges.
+    const copy = JSON.parse(
+      readFileSync(path.resolve(__dirname, '../i18n/locales/app/en.progress-badges.json'), 'utf-8'),
+    ).progressBadges as Record<string, { title: string; description: string }>;
+    const swiftStrings = (start: string) => {
+      const block = between(start, '\n    }\n');
+      return Object.fromEntries(
+        [...block.matchAll(/case \.(\w+):\s*return "([^"]+)"/g)].map((m) => [
+          m[1],
+          m[2].replace(/[^\x20-\x7E]/g, '').trim(),
+        ]),
+      );
+    };
+    const titles = swiftStrings('var title: String');
+    const descriptions = swiftStrings('var description: String');
+    for (const id of BADGE_IDS) {
+      expect(copy[id].title, `${id} title`).toBe(titles[id]);
+      expect(copy[id].description, `${id} description`).toBe(descriptions[id]);
+    }
+  });
+
+  it('counts offers, not bites, for the variety badges', () => {
+    // A refusal logged is an exposure. Counting only ate/tasted rewarded the
+    // child for eating, which is the pressure feeding therapy avoids.
+    const criteria = between('func criteria', '\n    }\n}');
+    expect(criteria).not.toMatch(/tried/);
+    expect(swift).toMatch(/entry\.result == nil \? nil : entry\.foodId/);
+  });
+
   it('carries no English copy', () => {
     const src = readFileSync(path.resolve(__dirname, 'badgeCatalog.ts'), 'utf-8');
     expect(src).not.toMatch(/First Try-Bite|Week Warrior|Perfect Week/);
