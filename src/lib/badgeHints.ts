@@ -63,11 +63,10 @@ export function lockedBadgeHint(
     case 'tenDayStreak':
       return { progress: currentStreak(entries, kidId, { todayKey: todayIso }), total: target };
     case 'perfectWeek': {
-      const week = thisWeekResults(entries, kidId, todayIso);
-      // One refusal this week rules the badge out until Monday; a bar that
-      // keeps filling would promise something it cannot deliver.
-      if (week.some((e) => e.result === 'refused')) return null;
-      return { progress: week.filter((e) => e.result === 'ate').length, total: target };
+      // Any logged result counts, "not today" included, as on iOS
+      // (BadgeService.swift): rewarding zero refusals taught parents to skip
+      // logging the hard meals.
+      return { progress: thisWeekResults(entries, kidId, todayIso).length, total: target };
     }
     default:
       return null;
